@@ -14,7 +14,7 @@ get_profile_ports() {
     case $1 in
         "tm") echo "9711" ;;
         "cp") echo "9443 9444" ;;
-        "gw") echo "8284 8247" ;;
+    "gw") echo "8281 8244" ;;
         *) echo "" ;;
     esac
 }

@@ -25,6 +25,18 @@ check_port_availability() {
     # Check if port is in use
     if lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1; then
         echo "Port $port is currently in use."
+
+        # If the container exists, check whether it's actually our container holding the port.
+        # This is more reliable than parsing `docker ps` output (formatting differs across versions).
+        if docker ps --format "{{.Names}}" | grep -E "^${container_name}$" >/dev/null 2>&1; then
+            local mapped_port
+            mapped_port=$(docker port "$container_name" 3306/tcp 2>/dev/null | awk -F: '{print $2}' | head -1)
+            if [ -n "$mapped_port" ] && [ "$mapped_port" = "$port" ]; then
+                echo "✓ Port $port is being used by our existing MySQL container '$container_name'"
+                echo "This is expected behavior - the container is already running."
+                return 0
+            fi
+        fi
         
         # Check if it's our MySQL container using the port
         if docker ps --format "table {{.Names}}\t{{.Ports}}" | grep -E "^${container_name}\s.*:${port}->" >/dev/null 2>&1; then
@@ -187,14 +199,13 @@ else
     
     # Start MySQL container
     echo "Starting MySQL container..."
-    docker run -d \
-      --name "$CONTAINER_NAME" \
-      -e MYSQL_ROOT_PASSWORD="$MYSQL_ROOT_PASSWORD" \
-      -p "$MYSQL_PORT:3306" \
-      mysql:8.0 \
-      --default-authentication-plugin=mysql_native_password \
-      --character-set-server=latin1 \
-      --collation-server=latin1_swedish_ci
+        docker run -d \
+            --name "$CONTAINER_NAME" \
+            -e MYSQL_ROOT_PASSWORD="$MYSQL_ROOT_PASSWORD" \
+            -p "$MYSQL_PORT:3306" \
+            mysql:8.0 \
+            --character-set-server=latin1 \
+            --collation-server=latin1_swedish_ci
 fi
 
 # Wait for MySQL to be ready

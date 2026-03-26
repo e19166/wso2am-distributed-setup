@@ -15,7 +15,7 @@ PROFILE_NAMES=("Traffic Manager" "Control Plane" "Gateway Worker")
 get_profile_ports() {
     case $1 in
         "tm") echo "9713" ;;  # 9711 + 2 (offset for TM)
-        "cp") echo "9443 9443" ;;  # Control Plane: publisher and devportal (offset 0)
+        "cp") echo "9443 9444" ;;  # Control Plane: publisher and devportal (offset 0)
         "gw") echo "8281 8244" ;;  # Gateway: HTTP and HTTPS (offset 1: 8280+1, 8243+1)
         *) echo "" ;;
     esac
