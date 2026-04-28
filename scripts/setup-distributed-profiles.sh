@@ -28,6 +28,46 @@ fi
 COMPONENTS_DIR="$BASE_DIR/components"
 PROFILES=("km" "tm" "dev" "pub" "gw")
 
+ensure_synapse_inbound_endpoints() {
+    local target_dir="$1"
+    local source_dir="$2"
+
+    # Some profileSetup combinations remove the Synapse inbound-endpoints dir or
+    # specific inbound endpoint XMLs. Config-mapper then fails while reading
+    # metadata at startup.
+    local target_inbound="$target_dir/repository/deployment/server/synapse-configs/default/inbound-endpoints"
+    local source_inbound="$source_dir/repository/deployment/server/synapse-configs/default/inbound-endpoints"
+
+    mkdir -p "$target_inbound"
+
+    if [ -d "$source_inbound" ]; then
+        # If dir is empty, copy everything.
+        if [ -z "$(ls -A "$target_inbound" 2>/dev/null)" ]; then
+            cp -n "$source_inbound"/*.xml "$target_inbound"/ 2>/dev/null || true
+        fi
+
+        # Ensure the two commonly referenced files always exist.
+        for f in WebSocketInboundEndpoint.xml SecureWebSocketInboundEndpoint.xml; do
+            if [ -f "$source_inbound/$f" ] && [ ! -f "$target_inbound/$f" ]; then
+                cp "$source_inbound/$f" "$target_inbound/" 2>/dev/null || true
+            fi
+        done
+    fi
+}
+
+ensure_axis2_blocking_client() {
+    local target_dir="$1"
+    local source_dir="$2"
+
+    local target_file="$target_dir/repository/conf/axis2/axis2_blocking_client.xml"
+    local source_file="$source_dir/repository/conf/axis2/axis2_blocking_client.xml"
+
+    if [ ! -f "$target_file" ] && [ -f "$source_file" ]; then
+        mkdir -p "$(dirname "$target_file")"
+        cp "$source_file" "$target_file" 2>/dev/null || true
+    fi
+}
+
 # Setup MySQL connector
 setup_mysql_connector() {
     local target_dir="$1"
@@ -71,6 +111,18 @@ for i in "${!PROFILES[@]}"; do
         "pub") sh bin/profileSetup.sh -Dprofile=api-publisher ;;
         "gw") sh bin/profileSetup.sh -Dprofile=gateway-worker ;;
     esac
+
+    # Keep synapse inbound endpoints present for profiles that use config-mapper
+    # against synapse-configs.
+    case "$profile" in
+        "km"|"tm"|"dev"|"pub") ensure_synapse_inbound_endpoints "$target_dir" "$SOURCE_DIR" ;;
+    esac
+
+    # Key manager profileSetup removes axis2_blocking_client.xml, but config-mapper
+    # metadata can still reference it on startup.
+    if [ "$profile" = "km" ]; then
+        ensure_axis2_blocking_client "$target_dir" "$SOURCE_DIR"
+    fi
     
     # Replace deployment.toml if custom config exists
     toml_source="$BASE_DIR/conf/toml/${profile}_deployment.toml"
