@@ -22,8 +22,11 @@ unzip wso2am-4.x.0.zip
 
 ### 2. One-Command Complete Setup
 ```bash
-# Setup MySQL database with Docker
+# Setup MySQL database with Docker (includes database initialization)
 ./scripts/setup-mysql-docker.sh
+
+# Alternative: Run database setup separately if needed
+./scripts/setup-mysql-databases.sh
 
 # Setup all WSO2 profiles with database integration
 ./scripts/setup-distributed-profiles.sh

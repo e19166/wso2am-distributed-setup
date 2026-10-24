@@ -24,10 +24,18 @@ fi
 # Database configuration
 MYSQL_HOST="127.0.0.1"
 
+# Load container name from .env or default
+if [[ -f "$BASE_DIR/.env" ]]; then
+    source "$BASE_DIR/.env"
+else
+    CONTAINER_NAME="wso2am-mysql"
+fi
+
 echo "Setting up MySQL databases for WSO2 API Manager..."
 
-# Create databases and users
-mysql -h"$MYSQL_HOST" -P"$MYSQL_PORT" -uroot -p"$MYSQL_ROOT_PASSWORD" <<EOF
+# Create a temporary SQL file for database and user setup
+TEMP_SQL_FILE=$(mktemp)
+cat <<EOF > "$TEMP_SQL_FILE"
 DROP DATABASE IF EXISTS $APIM_DB_NAME;
 DROP DATABASE IF EXISTS $SHARED_DB_NAME;
 CREATE DATABASE $APIM_DB_NAME CHARACTER SET latin1;
@@ -43,6 +51,12 @@ GRANT ALL PRIVILEGES ON $SHARED_DB_NAME.* TO '$SHARED_DB_USER'@'%';
 FLUSH PRIVILEGES;
 EOF
 
+# Execute the SQL file using docker exec
+docker exec -i "$CONTAINER_NAME" mysql -h"localhost" -P"3306" -uroot -p"$MYSQL_ROOT_PASSWORD" < "$TEMP_SQL_FILE"
+
+# Clean up temp file
+rm "$TEMP_SQL_FILE"
+
 # Find WSO2AM installation for DB scripts
 SOURCE_DIR=""
 for dir in "$BASE_DIR"/wso2am-*; do
@@ -56,10 +70,10 @@ if [ -n "$SOURCE_DIR" ]; then
     echo "Initializing database schemas..."
     
     # Initialize APIM database
-    mysql -h"$MYSQL_HOST" -P"$MYSQL_PORT" -u"$APIM_DB_USER" -p"$APIM_DB_PASSWORD" "$APIM_DB_NAME" < "$SOURCE_DIR/dbscripts/apimgt/mysql.sql"
+    cat "$SOURCE_DIR/dbscripts/apimgt/mysql.sql" | docker exec -i "$CONTAINER_NAME" mysql -h"localhost" -P"3306" -u"$APIM_DB_USER" -p"$APIM_DB_PASSWORD" "$APIM_DB_NAME"
     
     # Initialize Shared database
-    mysql -h"$MYSQL_HOST" -P"$MYSQL_PORT" -u"$SHARED_DB_USER" -p"$SHARED_DB_PASSWORD" "$SHARED_DB_NAME" < "$SOURCE_DIR/dbscripts/mysql.sql"
+    cat "$SOURCE_DIR/dbscripts/mysql.sql" | docker exec -i "$CONTAINER_NAME" mysql -h"localhost" -P"3306" -u"$SHARED_DB_USER" -p"$SHARED_DB_PASSWORD" "$SHARED_DB_NAME"
     
     echo "Database setup complete!"
     echo "APIM DB: $APIM_DB_NAME (user: $APIM_DB_USER)"
